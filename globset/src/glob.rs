@@ -726,6 +726,7 @@ impl<'a> Parser<'a> {
                 '{' => try!(self.push_alternate()),
                 '}' => try!(self.pop_alternate()),
                 ',' => try!(self.parse_comma()),
+                '\\' => try!(self.parse_escape()),
                 c => {
                     if is_separator(c) {
                         // Normalize all patterns to use / as a separator.
@@ -772,6 +773,13 @@ impl<'a> Parser<'a> {
         match self.stack.last() {
             None => Err(self.error(ErrorKind::UnopenedAlternates)),
             Some(ref pat) => Ok(!pat.is_empty()),
+        }
+    }
+
+    fn parse_escape(&mut self) -> Result<(), Error> {
+        match self.bump() {
+            None => Err(self.error(ErrorKind::DanglingEscape)),
+            Some(c) => self.push_token(Token::Literal(c)),
         }
     }
 
@@ -1073,6 +1081,10 @@ mod tests {
     syntax!(cls17, "[a-z0-9]", vec![rclass(&[('a', 'z'), ('0', '9')])]);
     syntax!(cls18, "[!0-9a-z]", vec![rclassn(&[('0', '9'), ('a', 'z')])]);
     syntax!(cls19, "[!a-z0-9]", vec![rclassn(&[('a', 'z'), ('0', '9')])]);
+    syntax!(esc1, "a\\b", vec![Literal('a'), Literal('b')]);
+    syntax!(esc2, "a\\*", vec![Literal('a'), Literal('*')]);
+    syntax!(esc3, "a\\\\b", vec![Literal('a'), Literal('\\'), Literal('b')]);
+    syntax!(esc4, "a\\\\*", vec![Literal('a'), Literal('\\'), ZeroOrMore]);
 
     syntaxerr!(err_rseq1, "a**", ErrorKind::InvalidRecursive);
     syntaxerr!(err_rseq2, "**a", ErrorKind::InvalidRecursive);
@@ -1087,6 +1099,8 @@ mod tests {
     syntaxerr!(err_unclosed4, "[!]", ErrorKind::UnclosedClass);
     syntaxerr!(err_range1, "[z-a]", ErrorKind::InvalidRange('z', 'a'));
     syntaxerr!(err_range2, "[z--]", ErrorKind::InvalidRange('z', '-'));
+    syntaxerr!(err_esc1, "\\", ErrorKind::DanglingEscape);
+    syntaxerr!(err_esc2, "a\\", ErrorKind::DanglingEscape);
 
     const CASEI: Options = Options {
         casei: true,
@@ -1192,6 +1206,14 @@ mod tests {
     matches!(matchalt11, "{*.foo,*.bar,*.wat}", "test.foo");
     matches!(matchalt12, "{*.foo,*.bar,*.wat}", "test.bar");
     matches!(matchalt13, "{*.foo,*.bar,*.wat}", "test.wat");
+
+    matches!(matchesc1, "a\\b", "ab");
+    matches!(matchesc2, "a\\\\b", "a\\b");
+    matches!(matchesc3, "a\\\\\\b", "a\\b");
+    matches!(matchesc4, "a\\\\\\\\b", "a\\\\b");
+    matches!(matchesc5, "a\\\\", "a\\");
+    matches!(matchesc6, "a\\*", "a*");
+    matches!(matchesc7, "\\*a", "*a");
 
     matches!(matchslash1, "abc/def", "abc/def", SLASHLIT);
     #[cfg(unix)]
