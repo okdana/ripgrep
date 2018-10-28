@@ -462,6 +462,10 @@ impl GitignoreBuilder {
             }
         }
         glob.actual = line.to_string();
+        // Treat `**` like `*` to avoid mangling below.
+        if glob.actual == "**" {
+            glob.actual = "*".to_string();
+        }
         // If there is a literal slash, then this is a glob that must match the
         // entire path name. Otherwise, we should let it match anywhere, so use
         // a **/ prefix.
@@ -683,6 +687,9 @@ mod tests {
     ignored!(ig40, ROOT, "\\*", "*");
     ignored!(ig41, ROOT, "\\a", "a");
     ignored!(ig42, ROOT, "s*.rs", "sfoo.rs");
+    ignored!(ig43, ROOT, "**", "foo.rs");
+    ignored!(ig44, ROOT, "**", "foo/bar.rs");
+    ignored!(ig45, ROOT, "**", "foo/bar/baz.rs");
 
     not_ignored!(ignot1, ROOT, "amonths", "months");
     not_ignored!(ignot2, ROOT, "monthsa", "months");
